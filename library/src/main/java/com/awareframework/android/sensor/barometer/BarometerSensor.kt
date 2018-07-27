@@ -11,6 +11,7 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.util.Log
 import com.awareframework.android.core.AwareSensor
+import com.awareframework.android.core.db.model.DbSyncConfig
 import com.awareframework.android.core.model.SensorConfig
 import com.awareframework.android.sensor.barometer.model.BarometerData
 import com.awareframework.android.sensor.barometer.model.BarometerDevice
@@ -23,22 +24,34 @@ import com.awareframework.android.sensor.barometer.model.BarometerDevice
  * @author  sercant
  * @date 27/07/2018
  */
-class BarometerService : AwareSensor(), SensorEventListener {
+class BarometerSensor : AwareSensor(), SensorEventListener {
 
     companion object {
-        const val TAG = "AWAREBarometerService"
+        const val TAG = "AWAREBarometerSensor"
 
         const val ACTION_AWARE_BAROMETER = "ACTION_AWARE_BAROMETER"
 
         val CONFIG = BarometerConfig()
+
+        var currentInterval: Int = 0
+            private set
     }
 
-    lateinit var mSensorManager: SensorManager
-    var mPressure: Sensor? = null
-    lateinit var sensorThread: HandlerThread
-    lateinit var sensorHandler: Handler
+    private lateinit var mSensorManager: SensorManager
+    private var mPressure: Sensor? = null
+    private lateinit var sensorThread: HandlerThread
+    private lateinit var sensorHandler: Handler
 
-    var lastSave = 0L
+    private var lastSave = 0L
+
+    private var lastValue: Float = 0f
+    private var lastTimestamp: Long = 0
+    private var lastSavedAt: Long = 0
+
+    private val dataBuffer = ArrayList<BarometerData>()
+
+    var dataCount: Int = 0
+    var lastDataCountTimestamp: Long = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -110,7 +123,7 @@ class BarometerService : AwareSensor(), SensorEventListener {
             version = sensor.version.toString()
         }
 
-        dbEngine?.save(device, BarometerDevice.TABLE_NAME)
+        dbEngine?.save(device, BarometerDevice.TABLE_NAME, 0)
 
         logd("Barometer sensor info: $device")
     }
@@ -120,17 +133,71 @@ class BarometerService : AwareSensor(), SensorEventListener {
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        event ?: return
+
+        val currentTime = System.currentTimeMillis()
+
+        if (currentTime - lastDataCountTimestamp >= 1000) {
+            currentInterval = dataCount
+            dataCount = 0
+            lastDataCountTimestamp = currentTime
+        }
+
+        if (currentTime - lastTimestamp < (900.0 / CONFIG.interval)) {
+            // skip this event
+            return
+        }
+        lastTimestamp = currentTime
+
+        if (CONFIG.threshold > 0
+                && Math.abs(event.values[0] - lastValue) < CONFIG.threshold) {
+            return
+        }
+        lastValue = event.values[0]
+
+        val data = BarometerData().apply {
+            timestamp = currentTime
+            eventTimestamp = event.timestamp
+            deviceId = CONFIG.deviceId
+            pressure = event.values[0]
+            accuracy = event.accuracy
+            label = CONFIG.label
+        }
+
+        CONFIG.sensorObserver?.onDataChanged(data)
+
+        dataBuffer.add(data)
+        dataCount++
+
+        if (currentTime - lastSavedAt < CONFIG.period * 60000) { // convert minute to ms
+            // not ready to save yet
+            return
+        }
+        lastSavedAt = currentTime
+
+        val dataBuffer = this.dataBuffer.toTypedArray()
+        this.dataBuffer.clear()
+
+        try {
+            logd("Saving buffer to database.")
+            dbEngine?.save(dataBuffer, BarometerData.TABLE_NAME)
+
+            sendBroadcast(Intent(ACTION_AWARE_BAROMETER))
+        } catch (e: Exception) {
+            e.message ?: logw(e.message!!)
+            e.printStackTrace()
+        }
     }
 
     override fun onSync(intent: Intent?) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        dbEngine?.startSync(BarometerData.TABLE_NAME)
+        dbEngine?.startSync(BarometerDevice.TABLE_NAME, DbSyncConfig(removeAfterSync = false))
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     interface BarometerObserver {
-        fun onBarometerChanged(data: BarometerData)
+        fun onDataChanged(data: BarometerData)
     }
 
     data class BarometerConfig(
@@ -145,6 +212,11 @@ class BarometerService : AwareSensor(), SensorEventListener {
              * 20 - sample per second
              */
             var interval: Int = 5,
+
+            /**
+             * Period to save data in minutes. (optional)
+             */
+            var period: Float = 1f,
 
             var threshold: Double = 0.0
     ) : SensorConfig(dbPath = "aware_barometer") {
@@ -161,9 +233,9 @@ class BarometerService : AwareSensor(), SensorEventListener {
 }
 
 private fun logd(text: String) {
-    if (BarometerService.CONFIG.debug) Log.d(BarometerService.TAG, text)
+    if (BarometerSensor.CONFIG.debug) Log.d(BarometerSensor.TAG, text)
 }
 
 private fun logw(text: String) {
-    Log.w(BarometerService.TAG, text)
+    Log.w(BarometerSensor.TAG, text)
 }

@@ -3,7 +3,7 @@
 
     <application>
         <service
-            android:name=".BarometerService"
+            android:name=".BarometerSensor"
             android:exported="true" />
     </application>
 </manifest>

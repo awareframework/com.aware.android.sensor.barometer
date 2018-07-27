@@ -10,7 +10,8 @@ import com.google.gson.Gson
  * @date 27/07/2018
  */
 data class BarometerData(
-    var pressure: Double = 0.0,
+    var pressure: Float = 0f,
+    var eventTimestamp: Long = 0L,
     var accuracy: Int = 0
 ) : AwareObject(jsonVersion = 1) {
 
