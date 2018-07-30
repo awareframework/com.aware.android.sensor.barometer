@@ -1,6 +1,9 @@
 package com.awareframework.android.sensor.barometer
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.hardware.Sensor
 import android.hardware.Sensor.TYPE_PRESSURE
 import android.hardware.SensorEvent
@@ -31,10 +34,28 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
 
         const val ACTION_AWARE_BAROMETER = "ACTION_AWARE_BAROMETER"
 
+        const val ACTION_AWARE_BAROMETER_START = "com.awareframework.android.sensor.barometer.SENSOR_START"
+        const val ACTION_AWARE_BAROMETER_STOP = "com.awareframework.android.sensor.barometer.SENSOR_STOP"
+
+        const val ACTION_AWARE_BAROMETER_SET_LABEL = "com.awareframework.android.sensor.barometer.ACTION_AWARE_BAROMETER_SET_LABEL"
+        const val EXTRA_LABEL = "label"
+
+        const val ACTION_AWARE_BAROMETER_SYNC = "com.awareframework.android.sensor.barometer.SENSOR_SYNC"
+
         val CONFIG = BarometerConfig()
 
         var currentInterval: Int = 0
             private set
+
+        fun startService(context: Context, config: BarometerConfig? = null) {
+            if (config != null)
+                CONFIG.replaceWith(config)
+            context.startService(Intent(context, BarometerSensor::class.java))
+        }
+
+        fun stopService(context: Context) {
+            context.stopService(Intent(context, BarometerSensor::class.java))
+        }
     }
 
     private lateinit var mSensorManager: SensorManager
@@ -50,8 +71,23 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
 
     private val dataBuffer = ArrayList<BarometerData>()
 
-    var dataCount: Int = 0
-    var lastDataCountTimestamp: Long = 0
+    private var dataCount: Int = 0
+    private var lastDataCountTimestamp: Long = 0
+
+    private val barometerReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            intent ?: return
+            when (intent.action) {
+                ACTION_AWARE_BAROMETER_SET_LABEL -> {
+                    intent.getStringExtra(EXTRA_LABEL)?.let {
+                        CONFIG.label = it
+                    }
+                }
+
+                ACTION_AWARE_BAROMETER_SYNC -> onSync(intent)
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -65,6 +101,11 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
         sensorThread.start()
 
         sensorHandler = Handler(sensorThread.looper)
+
+        registerReceiver(barometerReceiver, IntentFilter().apply {
+            addAction(ACTION_AWARE_BAROMETER_SET_LABEL)
+            addAction(ACTION_AWARE_BAROMETER_SYNC)
+        })
 
         logd("Barometer service created.")
     }
@@ -103,6 +144,8 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
         sensorThread.quit()
 
         dbEngine?.close()
+
+        unregisterReceiver(barometerReceiver)
 
         logd("Barometer service terminated...")
     }
@@ -201,6 +244,9 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
     }
 
     data class BarometerConfig(
+            /**
+             * For real-time observation of the sensor data collection.
+             */
             var sensorObserver: BarometerObserver? = null,
 
             /**
@@ -218,7 +264,14 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
              */
             var period: Float = 1f,
 
+            /**
+             * Barometer threshold (float).  Do not record consecutive points if
+             * change in value is less than the set value.
+             */
             var threshold: Double = 0.0
+
+            // TODO wakelock?
+
     ) : SensorConfig(dbPath = "aware_barometer") {
 
         override fun <T : SensorConfig> replaceWith(config: T) {
@@ -227,6 +280,35 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
             if (config is BarometerConfig) {
                 sensorObserver = config.sensorObserver
                 interval = config.interval
+            }
+        }
+    }
+
+    class BarometerSensorBroadcastReceiver : AwareSensor.SensorBroadcastReceiver() {
+
+        override fun onReceive(context: Context?, intent: Intent?) {
+            context ?: return
+
+            logd("Sensor broadcast received. action: " + intent?.action)
+
+            when (intent?.action) {
+                SENSOR_START_ENABLED -> {
+                    logd("Sensor enabled: " + CONFIG.enabled)
+
+                    if (CONFIG.enabled) {
+                        startService(context)
+                    }
+                }
+
+                ACTION_AWARE_BAROMETER_STOP,
+                SENSOR_STOP_ALL -> {
+                    logd("Stopping sensor.")
+                    stopService(context)
+                }
+
+                ACTION_AWARE_BAROMETER_START -> {
+                    startService(context)
+                }
             }
         }
     }
