@@ -280,6 +280,8 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
             if (config is BarometerConfig) {
                 sensorObserver = config.sensorObserver
                 interval = config.interval
+                period = config.period
+                threshold = config.threshold
             }
         }
     }
