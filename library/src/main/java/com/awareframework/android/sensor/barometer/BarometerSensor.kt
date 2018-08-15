@@ -239,7 +239,7 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    interface BarometerObserver {
+    interface SensorObserver {
         fun onDataChanged(data: BarometerData)
     }
 
@@ -247,7 +247,7 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
             /**
              * For real-time observation of the sensor data collection.
              */
-            var sensorObserver: BarometerObserver? = null,
+            var sensorObserver: SensorObserver? = null,
 
             /**
              * Barometer interval in hertz per second: e.g.

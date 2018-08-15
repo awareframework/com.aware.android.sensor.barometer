@@ -22,7 +22,7 @@ class ExampleInstrumentedTest {
         assertEquals("com.aware.android.sensor.barometer.test", appContext.packageName)
 
         BarometerSensor.startService(appContext, BarometerSensor.BarometerConfig().apply {
-            sensorObserver = object : BarometerSensor.BarometerObserver {
+            sensorObserver = object : BarometerSensor.SensorObserver {
                 override fun onDataChanged(data: BarometerData) {
                     // your code here...
                 }
