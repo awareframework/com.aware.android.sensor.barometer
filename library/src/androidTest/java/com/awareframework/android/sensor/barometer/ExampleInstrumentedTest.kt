@@ -21,8 +21,8 @@ class ExampleInstrumentedTest {
         val appContext = InstrumentationRegistry.getTargetContext()
         assertEquals("com.aware.android.sensor.barometer.test", appContext.packageName)
 
-        BarometerSensor.startService(appContext, BarometerSensor.BarometerConfig().apply {
-            sensorObserver = object : BarometerSensor.SensorObserver {
+        BarometerSensor.start(appContext, BarometerSensor.Config().apply {
+            sensorObserver = object : BarometerSensor.Observer {
                 override fun onDataChanged(data: BarometerData) {
                     // your code here...
                 }

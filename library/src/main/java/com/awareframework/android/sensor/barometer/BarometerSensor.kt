@@ -30,7 +30,7 @@ import com.awareframework.android.sensor.barometer.model.BarometerDevice
 class BarometerSensor : AwareSensor(), SensorEventListener {
 
     companion object {
-        const val TAG = "AWAREBarometerSensor"
+        const val TAG = "AWARE::Barometer"
 
         const val ACTION_AWARE_BAROMETER = "ACTION_AWARE_BAROMETER"
 
@@ -42,18 +42,18 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
 
         const val ACTION_AWARE_BAROMETER_SYNC = "com.awareframework.android.sensor.barometer.SENSOR_SYNC"
 
-        val CONFIG = BarometerConfig()
+        val CONFIG = Config()
 
         var currentInterval: Int = 0
             private set
 
-        fun startService(context: Context, config: BarometerConfig? = null) {
+        fun start(context: Context, config: Config? = null) {
             if (config != null)
                 CONFIG.replaceWith(config)
             context.startService(Intent(context, BarometerSensor::class.java))
         }
 
-        fun stopService(context: Context) {
+        fun stop(context: Context) {
             context.stopService(Intent(context, BarometerSensor::class.java))
         }
     }
@@ -239,15 +239,15 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    interface SensorObserver {
+    interface Observer {
         fun onDataChanged(data: BarometerData)
     }
 
-    data class BarometerConfig(
+    data class Config(
             /**
              * For real-time observation of the sensor data collection.
              */
-            var sensorObserver: SensorObserver? = null,
+            var sensorObserver: Observer? = null,
 
             /**
              * Barometer interval in hertz per second: e.g.
@@ -277,7 +277,7 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
         override fun <T : SensorConfig> replaceWith(config: T) {
             super.replaceWith(config)
 
-            if (config is BarometerConfig) {
+            if (config is Config) {
                 sensorObserver = config.sensorObserver
                 interval = config.interval
                 period = config.period
@@ -298,18 +298,18 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
                     logd("Sensor enabled: " + CONFIG.enabled)
 
                     if (CONFIG.enabled) {
-                        startService(context)
+                        start(context)
                     }
                 }
 
                 ACTION_AWARE_BAROMETER_STOP,
                 SENSOR_STOP_ALL -> {
                     logd("Stopping sensor.")
-                    stopService(context)
+                    stop(context)
                 }
 
                 ACTION_AWARE_BAROMETER_START -> {
-                    startService(context)
+                    start(context)
                 }
             }
         }
