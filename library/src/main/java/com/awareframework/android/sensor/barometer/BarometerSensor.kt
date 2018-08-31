@@ -155,7 +155,9 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
 
         val device = BarometerDevice().apply {
             deviceId = CONFIG.deviceId
+            label = CONFIG.label
             timestamp = System.currentTimeMillis()
+
             maxRange = sensor.maximumRange
             minDelay = sensor.minDelay.toFloat()
             name = sensor.name
@@ -199,12 +201,13 @@ class BarometerSensor : AwareSensor(), SensorEventListener {
         lastValue = event.values[0]
 
         val data = BarometerData().apply {
-            timestamp = currentTime
-            eventTimestamp = event.timestamp
             deviceId = CONFIG.deviceId
+            label = CONFIG.label
+            timestamp = currentTime
+
+            eventTimestamp = event.timestamp
             pressure = event.values[0]
             accuracy = event.accuracy
-            label = CONFIG.label
         }
 
         CONFIG.sensorObserver?.onDataChanged(data)
